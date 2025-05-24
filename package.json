@@ -13,6 +13,7 @@
     "dotenv": "^16.5.0",
     "express-session": "^1.18.1",
     "express-validator": "^7.2.1",
+    "framer-motion": "^12.12.2",
     "ics": "^3.8.1",
     "jsonwebtoken": "^9.0.2",
     "knex": "^3.1.0",
@@ -23,6 +24,7 @@
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.0",
     "react-scripts": "^5.0.1",
+    "react-toastify": "^11.0.5",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

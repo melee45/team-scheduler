@@ -1,10 +1,11 @@
 import React, { useState } from "react";
+import { toast, ToastContainer } from "react-toastify";
+import { motion } from "framer-motion";
+import "react-toastify/dist/ReactToastify.css";
 
 const LoginRegister = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
@@ -15,9 +16,6 @@ const LoginRegister = ({ onLogin }) => {
     const endpoint = isLogin ? "/login" : "/register";
 
     setLoading(true);
-    setError("");
-    setSuccess("");
-
     try {
       const res = await fetch(`http://localhost:4000${endpoint}`, {
         method: "POST",
@@ -31,72 +29,84 @@ const LoginRegister = ({ onLogin }) => {
       if (isLogin) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("name", data.name);
-        onLogin(); // trigger view change
+        toast.success("Login successful!");
+        onLogin();
       } else {
-        setSuccess("Registration successful! Redirecting to login...");
-        setTimeout(() => {
-          setIsLogin(true);
-          setSuccess("");
-        }, 2000);
+        // Automatically log in after successful registration
+        const loginRes = await fetch(`http://localhost:4000/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: form.email, password: form.password }),
+        });
+
+        const loginData = await loginRes.json();
+        if (!loginRes.ok) throw new Error(loginData.error || "Login after register failed");
+
+        localStorage.setItem("token", loginData.token);
+        localStorage.setItem("name", loginData.name);
+        toast.success("Registered and logged in!");
+        onLogin();
       }
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto mt-16 p-6 border rounded shadow">
-      <h2 className="text-xl font-bold mb-4">{isLogin ? "Login" : "Register"}</h2>
+    <motion.div
+      initial={{ opacity: 0, y: 40 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="max-w-md mx-auto mt-16 p-6 border rounded-2xl shadow-lg bg-white"
+    >
+      <h2 className="text-2xl font-bold mb-6 text-center">
+        {isLogin ? "Login to your account" : "Create an account"}
+      </h2>
 
       {!isLogin && (
         <input
-          className="block w-full mb-2 p-2 border rounded"
+          className="block w-full mb-3 p-3 border rounded-xl focus:outline-none focus:ring focus:ring-blue-300"
           name="name"
           placeholder="Name"
           onChange={handleChange}
         />
       )}
       <input
-        className="block w-full mb-2 p-2 border rounded"
+        className="block w-full mb-3 p-3 border rounded-xl focus:outline-none focus:ring focus:ring-blue-300"
         name="email"
         placeholder="Email"
         onChange={handleChange}
       />
       <input
-        className="block w-full mb-4 p-2 border rounded"
+        className="block w-full mb-4 p-3 border rounded-xl focus:outline-none focus:ring focus:ring-blue-300"
         name="password"
         type="password"
         placeholder="Password"
         onChange={handleChange}
       />
 
-      {error && <div className="text-red-500 mb-2">{error}</div>}
-      {success && <div className="text-green-600 mb-2">{success}</div>}
-
       <button
-        className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+        className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition-all disabled:opacity-50"
         onClick={handleSubmit}
         disabled={loading}
       >
         {loading ? "Please wait..." : isLogin ? "Login" : "Register"}
       </button>
 
-      <p className="text-sm mt-4 text-center">
+      <p className="text-sm mt-5 text-center text-gray-600">
         {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
         <button
-          className="text-blue-600 underline"
-          onClick={() => {
-            setError("");
-            setSuccess("");
-            setIsLogin(!isLogin);
-          }}
+          className="text-blue-600 underline font-medium"
+          onClick={() => setIsLogin(!isLogin)}
         >
           {isLogin ? "Register" : "Login"}
         </button>
       </p>
-    </div>
+
+      <ToastContainer position="top-center" />
+    </motion.div>
   );
 };
 
