@@ -16,6 +16,10 @@ model User {
   lastActivity  DateTime?  // updated on any user action (view/edit)
   availability  Availability[]
 
+  // 🔐 Password reset
+  resetToken     String?    // token for password reset
+  resetTokenExp  DateTime?  // token expiration time
+
   @@map("users") // optional: table name override
 }
 
