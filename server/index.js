@@ -4,6 +4,7 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const prisma = require("./prismaClient");
 
 const app = express();
 const PORT = 4000;
@@ -12,18 +13,18 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 app.use(cors());
 app.use(bodyParser.json());
 
-let users = []; // In-memory user store
-let allAvailabilities = [];
-
-// Helper middleware to check JWT
-function authenticate(req, res, next) {
+// Helper middleware to check JWT and set req.user
+async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.sendStatus(401);
 
   const token = authHeader.split(" ")[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = users.find(u => u.email === decoded.email);
+    // Find user by id from token
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+    });
     if (!user) return res.sendStatus(401);
     req.user = user;
     next();
@@ -36,95 +37,157 @@ function authenticate(req, res, next) {
 
 // Register
 app.post("/register", async (req, res) => {
-  const { name, email, password } = req.body;
-  if (users.find(u => u.email === email)) {
-    return res.status(400).json({ error: "Email already exists" });
-  }
-  const passwordHash = await bcrypt.hash(password, 10);
-  const newUser = {
-    name,
-    email,
-    passwordHash,
-    activity: {
-      lastLogin: null,
-      lastViewed: null,
-      lastEdited: null,
-      loginCount: 0,
-      viewCount: 0,
-      editCount: 0
+  const { email, password } = req.body;
+  try {
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ error: "Email already exists" });
     }
-  };
-  users.push(newUser);
-  res.json({ message: "Registered successfully" });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+      },
+    });
+
+    res.json({ message: "Registered successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // Login
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  const user = users.find(u => u.email === email);
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    return res.status(401).json({ error: "Invalid credentials" });
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Update lastLogin and increment loginCount (simulate loginCount via custom metadata, or skip)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
+
+    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    res.json({ token, email: user.email });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
-
-  user.activity.lastLogin = new Date();
-  user.activity.loginCount += 1;
-
-  const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: "7d" });
-  res.json({ token, name: user.name });
 });
 
 // --- Availability routes ---
 
-app.post("/availability", authenticate, (req, res) => {
-  const user = req.user;
+// Save/update availability
+app.post("/availability", authenticate, async (req, res) => {
+  const userId = req.user.id;
   const availability = req.body.availability;
 
-  if (!availability) {
-    return res.status(400).json({ error: "Availability required" });
+  if (!availability || !Array.isArray(availability)) {
+    return res.status(400).json({ error: "Availability is required and must be an array" });
   }
 
-  // Remove old entries
-  allAvailabilities = allAvailabilities.filter((a) => a.user !== user.email);
-  allAvailabilities.push({ user: user.email, availability });
+  try {
+    // Delete old availability for user
+    await prisma.availability.deleteMany({ where: { userId } });
 
-  user.activity.lastEdited = new Date();
-  user.activity.editCount += 1;
+    // Insert new availability
+    const createManyData = availability.map(({ day, hour }) => ({
+      userId,
+      day,
+      hour,
+    }));
 
-  res.json({ message: "Availability saved", allAvailabilities });
+    await prisma.availability.createMany({ data: createManyData });
+
+    // Update lastActivity
+    await prisma.user.update({
+      where: { id: userId },
+      data: { lastActivity: new Date() },
+    });
+
+    res.json({ message: "Availability saved" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-app.get("/availability", authenticate, (req, res) => {
-  req.user.activity.lastViewed = new Date();
-  req.user.activity.viewCount += 1;
+// Get availability for logged-in user
+app.get("/availability", authenticate, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const availability = await prisma.availability.findMany({ where: { userId } });
 
-  res.json(allAvailabilities);
+    // Update lastViewed
+    await prisma.user.update({
+      where: { id: userId },
+      data: { lastActivity: new Date() },
+    });
+
+    res.json(availability);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-app.get("/availability/aggregate", authenticate, (req, res) => {
-  req.user.activity.lastViewed = new Date();
-  req.user.activity.viewCount += 1;
+// Get aggregated availability counts (public)
+app.get("/availability/aggregate", async (req, res) => {
+  try {
+    const allAvailabilities = await prisma.availability.findMany();
+    const slotCounts = {};
 
-  const slotCounts = {};
-  allAvailabilities.forEach(({ availability }) => {
-    availability.forEach(({ day, hour }) => {
+    allAvailabilities.forEach(({ day, hour }) => {
       const key = `${day}_${hour}`;
       slotCounts[key] = (slotCounts[key] || 0) + 1;
     });
-  });
 
-  const sorted = Object.entries(slotCounts)
-    .map(([key, count]) => {
-      const [day, hour] = key.split("_").map(Number);
-      return { day, hour, count };
-    })
-    .sort((a, b) => b.count - a.count);
+    const sorted = Object.entries(slotCounts)
+      .map(([key, count]) => {
+        const [day, hour] = key.split("_").map(Number);
+        return { day, hour, count };
+      })
+      .sort((a, b) => b.count - a.count);
 
-  res.json(sorted);
+    res.json(sorted);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-// View activity
-app.get("/user/activity", authenticate, (req, res) => {
-  res.json(req.user.activity);
+// User activity summary
+app.get("/user/activity", authenticate, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        createdAt: true,
+        lastLogin: true,
+        lastActivity: true,
+      },
+    });
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 app.listen(PORT, () => {
