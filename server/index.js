@@ -50,6 +50,7 @@ app.post("/register", async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
+
   try {
     await prisma.user.create({
       data: {
@@ -58,9 +59,22 @@ app.post("/register", async (req, res) => {
         createdAt: new Date(),
       },
     });
-    res.json({ message: "Registered successfully" });
+
+    // Send welcome email
+    await transporter.sendMail({
+      from: `"Scheduler App" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Welcome to Scheduler App!",
+      text: `Hello! You've successfully registered with Scheduler App.`,
+      html: `
+        <h3>Welcome to Scheduler App!</h3>
+        <p>Your registration was successful. You can now <a href="http://localhost:3000/login">log in here</a> and set your availability.</p>
+      `,
+    });
+
+    res.json({ message: "Registered successfully. Please check your email." });
   } catch (err) {
-    console.error(err);
+    console.error("Registration failed:", err);
     res.status(500).json({ error: "Registration failed" });
   }
 });
@@ -91,6 +105,7 @@ app.post("/request-password-reset", async (req, res) => {
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user) {
+    // To avoid email enumeration, send success message regardless
     return res.status(200).json({ message: "If your email exists, a reset link will be sent." });
   }
 

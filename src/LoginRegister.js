@@ -4,6 +4,8 @@ const LoginRegister = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -11,6 +13,10 @@ const LoginRegister = ({ onLogin }) => {
 
   const handleSubmit = async () => {
     const endpoint = isLogin ? "/login" : "/register";
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
 
     try {
       const res = await fetch(`http://localhost:4000${endpoint}`, {
@@ -27,12 +33,16 @@ const LoginRegister = ({ onLogin }) => {
         localStorage.setItem("name", data.name);
         onLogin(); // trigger view change
       } else {
-        setIsLogin(true); // switch to login mode after register
+        setSuccess("Registration successful! Redirecting to login...");
+        setTimeout(() => {
+          setIsLogin(true);
+          setSuccess("");
+        }, 2000);
       }
-
-      setError("");
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -63,17 +73,26 @@ const LoginRegister = ({ onLogin }) => {
       />
 
       {error && <div className="text-red-500 mb-2">{error}</div>}
+      {success && <div className="text-green-600 mb-2">{success}</div>}
 
       <button
-        className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+        className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-50"
         onClick={handleSubmit}
+        disabled={loading}
       >
-        {isLogin ? "Login" : "Register"}
+        {loading ? "Please wait..." : isLogin ? "Login" : "Register"}
       </button>
 
       <p className="text-sm mt-4 text-center">
         {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-        <button className="text-blue-600 underline" onClick={() => setIsLogin(!isLogin)}>
+        <button
+          className="text-blue-600 underline"
+          onClick={() => {
+            setError("");
+            setSuccess("");
+            setIsLogin(!isLogin);
+          }}
+        >
           {isLogin ? "Register" : "Login"}
         </button>
       </p>
