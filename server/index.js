@@ -42,7 +42,7 @@ function authenticate(req, res, next) {
 
 // --- Register ---
 app.post("/register", async (req, res) => {
-  const { email, password } = req.body;
+  const { name, email, password } = req.body;
 
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) {
@@ -54,11 +54,13 @@ app.post("/register", async (req, res) => {
   try {
     await prisma.user.create({
       data: {
+        name,
         email,
         passwordHash,
         createdAt: new Date(),
       },
     });
+
 
     // Send welcome email
     await transporter.sendMail({
@@ -96,7 +98,7 @@ app.post("/login", async (req, res) => {
   });
 
   const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: "7d" });
-  res.json({ token, name: user.email });
+  res.json({ token, name: user.name || user.email });
 });
 
 // --- Request Password Reset ---

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { format, addDays, startOfWeek } from "date-fns";
 
-const hours = Array.from({ length: 12 }, (_, i) => i + 8); // 8 AM to 7 PM
+const hours = Array.from({ length: 13 }, (_, i) => i + 8); // 8 AM to 8 PM
 
 const WeekAvailabilityPicker = () => {
   const [selectedSlots, setSelectedSlots] = useState({});
@@ -13,7 +13,6 @@ const WeekAvailabilityPicker = () => {
   const token = localStorage.getItem("token");
   const name = localStorage.getItem("name");
 
-  // Load previous availability
   useEffect(() => {
     if (!token || !name) return;
 
@@ -56,9 +55,7 @@ const WeekAvailabilityPicker = () => {
   const toggleSlot = (day, hour) => {
     const key = `${day}_${hour}`;
     setSelectedSlots((prev) => {
-      const newValue = !prev[key];
-      if (newValue === prev[key]) return prev; // no change
-      const updated = { ...prev, [key]: newValue };
+      const updated = { ...prev, [key]: !prev[key] };
       setHasChanges(true);
       return updated;
     });
@@ -100,51 +97,52 @@ const WeekAvailabilityPicker = () => {
     return <p>Please log in to manage your availability.</p>;
   }
 
-  if (loading) {
-    return <p>Loading availability...</p>;
-  }
-
-  if (error) {
-    return <p className="text-red-600">{error}</p>;
-  }
+  if (loading) return <p>Loading availability...</p>;
+  if (error) return <p className="text-red-600">{error}</p>;
 
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-4">Select Your Availability</h2>
-      <div className="grid grid-cols-8 gap-2">
-        <div></div>
-        {[...Array(7)].map((_, dayIdx) => (
-          <div key={dayIdx} className="text-center font-semibold">
-            {format(addDays(weekStart, dayIdx), "EEE dd")}
-          </div>
-        ))}
 
-        {hours.map((hour) => (
-          <React.Fragment key={hour}>
-            <div className="text-right pr-2">{hour}:00</div>
-            {[...Array(7)].map((_, dayIdx) => {
-              const key = `${dayIdx}_${hour}`;
-              const selected = selectedSlots[key];
-              return (
-                <div
-                  key={key}
-                  className={`border h-10 cursor-pointer transition-colors ${
-                    selected ? "bg-blue-500" : "hover:bg-blue-100"
-                  }`}
-                  onClick={() => toggleSlot(dayIdx, hour)}
-                />
-              );
-            })}
-          </React.Fragment>
-        ))}
+      <div className="overflow-x-auto border rounded">
+        <div className="grid grid-cols-8 min-w-[700px]">
+          <div className="bg-gray-100 border-b p-2"></div>
+          {[...Array(7)].map((_, dayIdx) => (
+            <div key={dayIdx} className="bg-gray-100 text-center border-b font-semibold p-2">
+              {format(addDays(weekStart, dayIdx), "EEE")}
+            </div>
+          ))}
+
+          {hours.map((hour) => (
+            <React.Fragment key={hour}>
+              <div className="border-t text-right px-2 py-1 text-xs text-gray-500">
+                {hour > 12 ? `${hour - 12} PM` : hour === 12 ? "12 PM" : `${hour} AM`}
+              </div>
+              {[...Array(7)].map((_, dayIdx) => {
+                const key = `${dayIdx}_${hour}`;
+                const selected = selectedSlots[key];
+
+                return (
+                  <div
+                    key={key}
+                    onClick={() => toggleSlot(dayIdx, hour)}
+                    className={`border-t h-12 cursor-pointer transition duration-150 ${
+                      selected ? "bg-blue-500 hover:bg-blue-600" : "hover:bg-blue-100"
+                    }`}
+                  ></div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
       </div>
 
       {hasChanges && (
         <button
-          className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
           onClick={handleSubmit}
+          className="mt-4 px-6 py-2 bg-green-600 text-white font-semibold rounded hover:bg-green-700"
         >
-          Submit Availability
+          Save Availability
         </button>
       )}
     </div>

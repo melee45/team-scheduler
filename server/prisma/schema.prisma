@@ -8,29 +8,29 @@ datasource db {
 }
 
 model User {
-  id            String     @id @default(uuid())
-  email         String     @unique
-  passwordHash  String     // hashed password
-  createdAt     DateTime   @default(now())
-  lastLogin     DateTime?  // first login timestamp
-  lastActivity  DateTime?  // updated on any user action (view/edit)
-  availability  Availability[]
+  id             String         @id @default(uuid())
+  email          String         @unique
+  name           String?        // New: optional name
+  isAdmin        Boolean        @default(false) // New: admin flag
+  passwordHash   String
+  createdAt      DateTime       @default(now())
+  lastLogin      DateTime?
+  lastActivity   DateTime?
+  resetToken     String?
+  resetTokenExp  DateTime?
+  availability   Availability[]
 
-  // 🔐 Password reset
-  resetToken     String?    // token for password reset
-  resetTokenExp  DateTime?  // token expiration time
-
-  @@map("users") // optional: table name override
+  @@map("users")
 }
 
 model Availability {
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  day       Int      // 0 = Monday, 6 = Sunday
-  hour      Int      // 24-hour format, e.g. 13 = 1PM
+  day       Int
+  hour      Int
   createdAt DateTime @default(now())
 
-  @@unique([userId, day, hour]) // no duplicate slots per user
+  @@unique([userId, day, hour])
   @@map("availabilities")
 }
