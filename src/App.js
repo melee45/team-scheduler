@@ -4,8 +4,11 @@ import WeekAvailabilityPicker from "./WeekAvailabilityPicker";
 import AvailabilitySummary from "./AvailabilitySummary";
 import AggregatedView from "./AggregatedView";
 import LoginRegister from "./LoginRegister";
+import OnlineUsers from "./components/OnlineUsers"; // Adjust the path if needed
 
 function Dashboard({ onLogout }) {
+  const token = localStorage.getItem("token");
+
   return (
     <div className="max-w-4xl mx-auto py-8">
       <div className="flex justify-between mb-4">
@@ -17,6 +20,10 @@ function Dashboard({ onLogout }) {
           Logout
         </button>
       </div>
+
+      {/* Add the OnlineUsers component here */}
+      <OnlineUsers token={token} />
+
       <WeekAvailabilityPicker />
       <AvailabilitySummary />
       <AggregatedView />
